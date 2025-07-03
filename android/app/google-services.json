@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "209889654525",
+    "project_id": "rgpet-961cd",
+    "storage_bucket": "rgpet-961cd.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:209889654525:android:5f37f280bf44e4ea6f7094",
+        "android_client_info": {
+          "package_name": "com.example.rgpet"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCdC9vcE1oVkNAryeG6_Qh2CM3rYWK1zMg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
