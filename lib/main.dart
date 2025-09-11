@@ -1,8 +1,9 @@
-// lib/main.dart
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter_localizations/flutter_localizations.dart'; // Importe esta linha
+import 'package:intl/date_symbol_data_local.dart'; // Importe esta linha
 
 import 'package:rgpet/screens/cadastros_screen.dart';
 import 'package:rgpet/screens/cadastro_dono_screen.dart';
@@ -15,14 +16,17 @@ import 'package:rgpet/screens/tela_cadastro_pet.dart';
 import 'package:rgpet/screens/tela_agendamento_dono.dart';
 import 'package:rgpet/screens/tela_gerenciar_horarios_veterinario.dart';
 
-
 import 'firebase_options.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Inicialização do Firebase
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
+  // Inicialização da formatação de data para o locale pt_BR
+  await initializeDateFormatting('pt_BR', null);
+
   runApp(const MyApp());
 }
 
@@ -71,6 +75,15 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'RgPet App',
+      // Adicione estas 3 linhas
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [
+        Locale('pt', 'BR'), // Suporte para português do Brasil
+      ],
       theme: ThemeData(
         brightness: Brightness.dark,
         primaryColor: Colors.deepPurple,
@@ -158,7 +171,7 @@ class MyApp extends StatelessWidget {
         '/cadastros': (context) => const CadastrosScreen(),
         '/cadastro_veterinario': (context) => const CadastroVeterinarioScreen(),
         '/cadastro_dono': (context) => const CadastroDonoScreen(),
-        '/cadastro_pet': (context) => const TelaCadastroPet(), 
+        '/cadastro_pet': (context) => const TelaCadastroPet(),
         '/agendar_consulta_dono': (context) => const TelaAgendamentoDono(),
         '/login': (context) => const TelaLoginScreen(),
         '/dono': (context) => const TelaDono(),

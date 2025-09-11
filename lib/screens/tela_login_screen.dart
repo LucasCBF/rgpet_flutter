@@ -152,7 +152,7 @@ class _TelaLoginScreenState extends State<TelaLoginScreen> {
                       return 'Por favor, insira um email válido';
                     }
                     return null;
-                  },
+                  }, labelText: '',
                 ),
                 const SizedBox(height: 20),
                 CustomTextField(
@@ -167,7 +167,7 @@ class _TelaLoginScreenState extends State<TelaLoginScreen> {
                       return 'A senha deve ter pelo menos 6 caracteres';
                     }
                     return null;
-                  },
+                  }, labelText: '',
                 ),
                 const SizedBox(height: 20),
 

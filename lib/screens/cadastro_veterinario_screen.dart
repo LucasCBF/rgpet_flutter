@@ -158,7 +158,7 @@ class _CadastroVeterinarioScreenState extends State<CadastroVeterinarioScreen> {
                       return 'Por favor, insira o nome completo do veterinário';
                     }
                     return null;
-                  },
+                  }, labelText: '',
                 ),
                 const SizedBox(height: 20),
                 CustomTextField(
@@ -171,7 +171,7 @@ class _CadastroVeterinarioScreenState extends State<CadastroVeterinarioScreen> {
                     }
                     // Adicione validação de formato de CRMV se necessário
                     return null;
-                  },
+                  }, labelText: '',
                 ),
                 const SizedBox(height: 20),
                 CustomTextField(
@@ -182,7 +182,7 @@ class _CadastroVeterinarioScreenState extends State<CadastroVeterinarioScreen> {
                       return 'Por favor, insira a especialização';
                     }
                     return null;
-                  },
+                  }, labelText: '',
                 ),
                 const SizedBox(height: 20),
                 CustomTextField(
@@ -199,7 +199,7 @@ class _CadastroVeterinarioScreenState extends State<CadastroVeterinarioScreen> {
                       return 'O telefone deve ter 10 ou 11 dígitos (DDD + Número)';
                     }
                     return null;
-                  },
+                  }, labelText: '',
                 ),
                 const SizedBox(height: 20),
                 CustomTextField(
@@ -214,7 +214,7 @@ class _CadastroVeterinarioScreenState extends State<CadastroVeterinarioScreen> {
                       return 'Por favor, insira um email válido';
                     }
                     return null;
-                  },
+                  }, labelText: '',
                 ),
                 const SizedBox(height: 20),
                 CustomTextField(
@@ -230,7 +230,7 @@ class _CadastroVeterinarioScreenState extends State<CadastroVeterinarioScreen> {
                       return 'A senha deve ter pelo menos 6 caracteres';
                     }
                     return null;
-                  },
+                  }, labelText: '',
                 ),
                 const SizedBox(height: 40),
 

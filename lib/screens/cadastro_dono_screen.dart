@@ -155,7 +155,7 @@ class _CadastroDonoScreenState extends State<CadastroDonoScreen> {
                       return 'Por favor, insira seu nome completo';
                     }
                     return null;
-                  },
+                  }, labelText: '',
                 ),
                 const SizedBox(height: 20),
                 CustomTextField(
@@ -172,7 +172,7 @@ class _CadastroDonoScreenState extends State<CadastroDonoScreen> {
                       return 'O CPF deve ter 11 dígitos';
                     }
                     return null;
-                  },
+                  }, labelText: '',
                 ),
                 const SizedBox(height: 20),
                 CustomTextField(
@@ -183,7 +183,7 @@ class _CadastroDonoScreenState extends State<CadastroDonoScreen> {
                       return 'Por favor, insira seu endereço';
                     }
                     return null;
-                  },
+                  }, labelText: '',
                 ),
                 const SizedBox(height: 20),
                 CustomTextField(
@@ -199,7 +199,7 @@ class _CadastroDonoScreenState extends State<CadastroDonoScreen> {
                       return 'O telefone deve ter 10 ou 11 dígitos (DDD + Número)';
                     }
                     return null;
-                  },
+                  }, labelText: '',
                 ),
                 const SizedBox(height: 20),
                 CustomTextField(
@@ -214,7 +214,7 @@ class _CadastroDonoScreenState extends State<CadastroDonoScreen> {
                       return 'Por favor, insira um email válido';
                     }
                     return null;
-                  },
+                  }, labelText: '',
                 ),
                 const SizedBox(height: 20),
                 CustomTextField(
@@ -230,7 +230,7 @@ class _CadastroDonoScreenState extends State<CadastroDonoScreen> {
                       return 'A senha deve ter pelo menos 6 caracteres';
                     }
                     return null;
-                  },
+                  }, labelText: '',
                 ),
                 const SizedBox(height: 40),
 

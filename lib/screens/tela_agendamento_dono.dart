@@ -4,7 +4,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:rgpet/widgets/custom_button.dart';
 import 'package:rgpet/widgets/custom_text_field.dart';
-import 'package:intl/intl.dart'; // Importe intl
+import 'package:intl/intl.dart';
+import 'package:table_calendar/table_calendar.dart';
 
 class TelaAgendamentoDono extends StatefulWidget {
   const TelaAgendamentoDono({super.key});
@@ -16,18 +17,23 @@ class TelaAgendamentoDono extends StatefulWidget {
 class _TelaAgendamentoDonoState extends State<TelaAgendamentoDono> {
   final _formKey = GlobalKey<FormState>();
 
-  // Controladores para os campos do formulário
   final TextEditingController _motivoController = TextEditingController();
 
-  // Variáveis para armazenar o pet, veterinário e HORÁRIO DISPONÍVEL selecionados
+  // Variáveis para armazenar as seleções do usuário
   String? _selectedPetId;
   String? _selectedVeterinarioId;
-  String? _selectedHorarioId; // NOVO: ID do horário disponível selecionado
+  String? _selectedProcedure; // NOVO: Procedimento selecionado
+  DateTime? _selectedDay; // NOVO: Dia selecionado no calendário
+  String? _selectedHorarioId; // ID do horário selecionado
 
   // Listas para popular os Dropdowns
   List<Map<String, dynamic>> _pets = [];
   List<Map<String, dynamic>> _veterinarios = [];
-  List<Map<String, dynamic>> _horariosDisponiveisVeterinario = []; // NOVO: Horários do veterinário selecionado
+
+  // NOVO: Horários disponíveis para o veterinário selecionado
+  Map<DateTime, List<DocumentSnapshot>> _horariosPorDia = {};
+  // NOVO: Lista de horários para o dia selecionado
+  List<DocumentSnapshot> _horariosDoDia = [];
 
   bool _isLoading = true;
   String? _errorMessage;
@@ -35,7 +41,7 @@ class _TelaAgendamentoDonoState extends State<TelaAgendamentoDono> {
   @override
   void initState() {
     super.initState();
-    _loadInitialData(); // Carrega pets do dono e veterinários
+    _loadInitialData();
   }
 
   @override
@@ -61,7 +67,6 @@ class _TelaAgendamentoDonoState extends State<TelaAgendamentoDono> {
           .doc(user.uid)
           .collection('pets')
           .get();
-
       _pets = petsSnapshot.docs.map((doc) {
         final data = doc.data() as Map<String, dynamic>;
         return {'id': doc.id, 'nome': data['nome']};
@@ -71,7 +76,6 @@ class _TelaAgendamentoDonoState extends State<TelaAgendamentoDono> {
       QuerySnapshot veterinariosSnapshot = await FirebaseFirestore.instance
           .collection('veterinarios')
           .get();
-
       _veterinarios = veterinariosSnapshot.docs.map((doc) {
         final data = doc.data() as Map<String, dynamic>;
         return {'id': doc.id, 'nome': data['nomeCompleto']};
@@ -80,11 +84,12 @@ class _TelaAgendamentoDonoState extends State<TelaAgendamentoDono> {
       setState(() {
         _isLoading = false;
         if (_pets.isNotEmpty) {
-          _selectedPetId = _pets.first['id']; // Seleciona o primeiro pet por padrão
+          _selectedPetId = _pets.first['id'];
         }
         if (_veterinarios.isNotEmpty) {
-          _selectedVeterinarioId = _veterinarios.first['id']; // Seleciona o primeiro vet por padrão
-          _loadHorariosVeterinario(_selectedVeterinarioId!); // Carrega horários do primeiro vet
+          _selectedVeterinarioId = _veterinarios.first['id'];
+          // Inicia o carregamento dos horários do primeiro veterinário
+          _loadHorariosVeterinario(_selectedVeterinarioId!);
         }
       });
     } catch (e) {
@@ -92,119 +97,130 @@ class _TelaAgendamentoDonoState extends State<TelaAgendamentoDono> {
         _errorMessage = 'Erro ao carregar dados: ${e.toString()}';
         _isLoading = false;
       });
-      print('Erro ao carregar pets ou veterinários: $e');
     }
   }
 
-  // NOVO: Carrega horários disponíveis para o veterinário selecionado
+  // NOVO: Carrega todos os horários disponíveis de um veterinário
   Future<void> _loadHorariosVeterinario(String veterinarioId) async {
     setState(() {
-      _horariosDisponiveisVeterinario = []; // Limpa a lista anterior
-      _selectedHorarioId = null; // Reseta a seleção de horário
+      _horariosPorDia = {}; // Limpa os horários anteriores
+      _selectedDay = null;
+      _horariosDoDia = [];
+      _selectedHorarioId = null;
     });
+
     try {
       QuerySnapshot snapshot = await FirebaseFirestore.instance
           .collection('horariosDisponiveis')
           .where('veterinarioId', isEqualTo: veterinarioId)
-          .where('isAgendado', isEqualTo: false) // Apenas horários não agendados
+          .where('isAgendado', isEqualTo: false)
+          .where('isBloqueado', isEqualTo: false)
           .orderBy('timestamp', descending: false)
           .get();
 
-      setState(() {
-        _horariosDisponiveisVeterinario = snapshot.docs.map((doc) {
-          final data = doc.data() as Map<String, dynamic>;
-          return {
-            'id': doc.id,
-            'data': data['data'],
-            'hora': data['hora'],
-            'timestamp': data['timestamp'], // Manter o timestamp para exibição/ordenacao
-          };
-        }).toList();
-        if (_horariosDisponiveisVeterinario.isNotEmpty) {
-          _selectedHorarioId = _horariosDisponiveisVeterinario.first['id'];
+      final Map<DateTime, List<DocumentSnapshot>> tempHorarios = {};
+      for (var doc in snapshot.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        final DateTime timestamp = (data['timestamp'] as Timestamp).toDate();
+        final DateTime day = DateTime.utc(timestamp.year, timestamp.month, timestamp.day);
+
+        if (!tempHorarios.containsKey(day)) {
+          tempHorarios[day] = [];
         }
+        tempHorarios[day]!.add(doc);
+      }
+      setState(() {
+        _horariosPorDia = tempHorarios;
       });
     } catch (e) {
-      print('Erro ao carregar horários do veterinário: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erro ao carregar horários do veterinário: ${e.toString()}')),
+          SnackBar(content: Text('Erro ao carregar horários: ${e.toString()}')),
         );
       }
+    }
+  }
+
+  // NOVO: Lógica para selecionar um dia no calendário
+  void _onDaySelected(DateTime selectedDay, DateTime focusedDay) {
+    if (_horariosPorDia.containsKey(selectedDay)) {
+      setState(() {
+        _selectedDay = selectedDay;
+        _horariosDoDia = _horariosPorDia[selectedDay]!;
+        _selectedHorarioId = null; // Reseta o horário selecionado
+      });
+    } else {
+      // Se o dia não tem horários, limpa a lista e a seleção
+      setState(() {
+        _selectedDay = null;
+        _horariosDoDia = [];
+        _selectedHorarioId = null;
+      });
     }
   }
 
   Future<void> _agendarConsulta() async {
     if (_formKey.currentState!.validate()) {
-      if (_selectedPetId == null || _selectedVeterinarioId == null || _selectedHorarioId == null) {
+      if (_selectedPetId == null || _selectedVeterinarioId == null || _selectedProcedure == null || _selectedHorarioId == null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Por favor, selecione um pet, um veterinário e um horário disponível.')),
+          const SnackBar(content: Text('Por favor, preencha todos os campos obrigatórios.')),
         );
         return;
       }
-
       try {
         final user = FirebaseAuth.instance.currentUser;
-        if (user != null) {
-          // 1. Obter os detalhes do horário selecionado
-          final selectedHorario = _horariosDisponiveisVeterinario.firstWhere(
-                (horario) => horario['id'] == _selectedHorarioId,
-            orElse: () => {}, // Retorna um mapa vazio se não encontrar
+        if (user == null) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Erro: Usuário não logado.')));
+          return;
+        }
+
+        // 1. Obter os detalhes do horário selecionado
+        final selectedHorarioDoc = await FirebaseFirestore.instance
+            .collection('horariosDisponiveis')
+            .doc(_selectedHorarioId)
+            .get();
+        final selectedHorarioData = selectedHorarioDoc.data() as Map<String, dynamic>;
+        final Timestamp timestamp = selectedHorarioData['timestamp'];
+        final DateTime dataHoraConsulta = timestamp.toDate();
+
+        // 2. Criar o documento da consulta
+        DocumentReference consultaRef = await FirebaseFirestore.instance.collection('consultas').add({
+          'donoUid': user.uid,
+          'petId': _selectedPetId,
+          'veterinarioId': _selectedVeterinarioId,
+          'dataHoraConsulta': dataHoraConsulta,
+          'motivoConsulta': _motivoController.text.trim(),
+          'procedimento': _selectedProcedure, // NOVO: Salva o procedimento
+          'status': 'pendente',
+          'dataAgendamento': FieldValue.serverTimestamp(),
+          'horarioDisponivelId': _selectedHorarioId,
+        });
+
+        // 3. Atualizar o horário disponível para marcar como agendado
+        await FirebaseFirestore.instance.collection('horariosDisponiveis').doc(_selectedHorarioId).update({
+          'isAgendado': true,
+          'donoUidAgendamento': user.uid,
+          'petIdAgendamento': _selectedPetId,
+          'consultaId': consultaRef.id,
+        });
+
+        // 4. Criar notificação para o veterinário
+        await FirebaseFirestore.instance.collection('notificacoesVeterinario').add({
+          'veterinarioId': _selectedVeterinarioId,
+          'donoUid': user.uid,
+          'petId': _selectedPetId,
+          'tipo': 'nova_consulta',
+          'mensagem': 'Nova solicitação de consulta para ${DateFormat('dd/MM/yyyy HH:mm').format(dataHoraConsulta)}.',
+          'lida': false,
+          'timestamp': FieldValue.serverTimestamp(),
+          'consultaId': consultaRef.id,
+        });
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Consulta agendada com sucesso!')),
           );
-
-          if (selectedHorario.isEmpty) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Horário selecionado inválido ou já agendado.')),
-            );
-            return;
-          }
-
-          // 2. Criar o documento da consulta
-          DocumentReference consultaRef = await FirebaseFirestore.instance.collection('consultas').add({
-            'donoUid': user.uid,
-            'petId': _selectedPetId,
-            'veterinarioId': _selectedVeterinarioId,
-            'dataConsulta': selectedHorario['data'], // Usar data do horário disponível
-            'horaConsulta': selectedHorario['hora'], // Usar hora do horário disponível
-            'motivoConsulta': _motivoController.text.trim(),
-            'status': 'pendente',
-            'dataAgendamento': FieldValue.serverTimestamp(),
-            'horarioDisponivelId': _selectedHorarioId, // Referência ao horário disponível
-          });
-
-          // 3. Atualizar o horário disponível para marcar como agendado
-          await FirebaseFirestore.instance.collection('horariosDisponiveis').doc(_selectedHorarioId).update({
-            'isAgendado': true,
-            'donoUidAgendamento': user.uid,
-            'petIdAgendamento': _selectedPetId,
-            'consultaId': consultaRef.id, // Armazena o ID da consulta recém-criada
-          });
-
-          // 4. Criar notificação para o veterinário
-          await FirebaseFirestore.instance.collection('notificacoesVeterinario').add({
-            'veterinarioId': _selectedVeterinarioId,
-            'donoUid': user.uid,
-            'petId': _selectedPetId,
-            'tipo': 'nova_consulta',
-            'mensagem': 'Nova solicitação de consulta para ${selectedHorario['data']} às ${selectedHorario['hora']}.',
-            'lida': false,
-            'timestamp': FieldValue.serverTimestamp(),
-            'consultaId': consultaRef.id,
-          });
-
-
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Consulta agendada com sucesso! O veterinário será notificado.')),
-            );
-            Navigator.of(context).pop();
-          }
-        } else {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Erro: Usuário não logado.')),
-            );
-          }
+          Navigator.of(context).pop();
         }
       } catch (e) {
         if (mounted) {
@@ -212,7 +228,6 @@ class _TelaAgendamentoDonoState extends State<TelaAgendamentoDono> {
             SnackBar(content: Text('Erro ao agendar consulta: ${e.toString()}')),
           );
         }
-        print('Erro ao agendar consulta: $e');
       }
     }
   }
@@ -222,64 +237,12 @@ class _TelaAgendamentoDonoState extends State<TelaAgendamentoDono> {
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
-
     if (_errorMessage != null) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Text(
-            _errorMessage!,
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Colors.redAccent),
-            textAlign: TextAlign.center,
-          ),
-        ),
-      );
-    }
-
-    if (_pets.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Text(
-              'Você precisa cadastrar um pet antes de agendar uma consulta.',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(color: Colors.white70),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 20),
-            CustomButton(
-              text: 'Cadastrar Pet',
-              backgroundColor: Theme.of(context).elevatedButtonTheme.style?.backgroundColor?.resolve({MaterialState.selected}) ?? Colors.blue,
-              onPressed: () {
-                Navigator.of(context).pushNamed('/cadastro_pet');
-              },
-            ),
-          ],
-        ),
-      );
-    }
-
-    if (_veterinarios.isEmpty) {
-      return Center(
-        child: Text(
-          'Não há veterinários disponíveis para agendamento no momento.',
-          style: Theme.of(context).textTheme.titleLarge?.copyWith(color: Colors.white70),
-          textAlign: TextAlign.center,
-        ),
-      );
+      return Center(child: Text(_errorMessage!));
     }
 
     return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      appBar: AppBar(
-        title: Text(
-          'Agendar Consulta',
-          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-            color: Colors.redAccent,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ),
+      appBar: AppBar(title: const Text('Agendar Consulta')),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24.0),
         child: Form(
@@ -287,123 +250,86 @@ class _TelaAgendamentoDonoState extends State<TelaAgendamentoDono> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
-                'Selecione o Pet:',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(color: Colors.white),
-              ),
+              // Dropdown para o Pet
+              _buildDropdown('Selecione o Pet:', _pets, (value) => setState(() => _selectedPetId = value)),
+              const SizedBox(height: 20),
+
+              // Dropdown para o Veterinário
+              _buildDropdown('Selecione o Veterinário:', _veterinarios, (value) {
+                setState(() {
+                  _selectedVeterinarioId = value;
+                  if (value != null) {
+                    _loadHorariosVeterinario(value);
+                  }
+                });
+              }),
+              const SizedBox(height: 20),
+
+              // NOVO: Dropdown para o Procedimento
+              Text('Selecione o Procedimento:', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 8),
               DropdownButtonFormField<String>(
-                value: _selectedPetId,
+                value: _selectedProcedure,
                 decoration: InputDecoration(
-                  filled: true,
-                  fillColor: Theme.of(context).inputDecorationTheme.fillColor,
-                  border: Theme.of(context).inputDecorationTheme.border,
-                  enabledBorder: Theme.of(context).inputDecorationTheme.enabledBorder,
-                  focusedBorder: Theme.of(context).inputDecorationTheme.focusedBorder,
+                  hintText: 'Procedimento',
+                  hintStyle: Theme.of(context).inputDecorationTheme.hintStyle,
                 ),
                 dropdownColor: Theme.of(context).cardColor,
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Colors.white),
-                iconEnabledColor: Colors.white70,
-                validator: (value) => value == null ? 'Selecione um pet' : null,
-                items: _pets.map<DropdownMenuItem<String>>((pet) {
-                  return DropdownMenuItem<String>(
-                    value: pet['id'],
-                    child: Text(pet['nome']!),
-                  );
-                }).toList(),
-                onChanged: (String? newValue) {
-                  setState(() {
-                    _selectedPetId = newValue;
-                  });
-                },
+                items: ['Consulta', 'Vacinação', 'Higiene Bucal']
+                    .map((proc) => DropdownMenuItem(value: proc, child: Text(proc))).toList(),
+                onChanged: (value) => setState(() => _selectedProcedure = value),
+                validator: (value) => value == null ? 'Selecione um procedimento' : null,
               ),
               const SizedBox(height: 20),
 
-              Text(
-                'Selecione o Veterinário:',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(color: Colors.white),
-              ),
-              const SizedBox(height: 8),
-              DropdownButtonFormField<String>(
-                value: _selectedVeterinarioId,
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: Theme.of(context).inputDecorationTheme.fillColor,
-                  border: Theme.of(context).inputDecorationTheme.border,
-                  enabledBorder: Theme.of(context).inputDecorationTheme.enabledBorder,
-                  focusedBorder: Theme.of(context).inputDecorationTheme.focusedBorder,
-                ),
-                dropdownColor: Theme.of(context).cardColor,
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Colors.white),
-                iconEnabledColor: Colors.white70,
-                validator: (value) => value == null ? 'Selecione um veterinário' : null,
-                items: _veterinarios.map<DropdownMenuItem<String>>((vet) {
-                  return DropdownMenuItem<String>(
-                    value: vet['id'],
-                    child: Text(vet['nome']!),
-                  );
-                }).toList(),
-                onChanged: (String? newValue) {
-                  setState(() {
-                    _selectedVeterinarioId = newValue;
-                    if (newValue != null) {
-                      _loadHorariosVeterinario(newValue); // Carrega horários ao mudar o veterinário
-                    }
-                  });
-                },
-              ),
+              // Calendário para selecionar o dia
+              _buildCalendar(),
               const SizedBox(height: 20),
 
-              Text(
-                'Selecione a Data e Hora:',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(color: Colors.white),
-              ),
-              const SizedBox(height: 8),
-              _horariosDisponiveisVeterinario.isEmpty
-                  ? Padding(
-                padding: const EdgeInsets.symmetric(vertical: 16.0),
-                child: Text(
-                  _selectedVeterinarioId != null
-                      ? 'Nenhum horário disponível para este veterinário.'
-                      : 'Selecione um veterinário para ver os horários.',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.white70),
-                  textAlign: TextAlign.center,
+              // NOVO: Grade de horários do dia selecionado
+              if (_selectedDay != null && _horariosDoDia.isNotEmpty) ...[
+                Text('Horários disponíveis em ${DateFormat('dd/MM/yyyy').format(_selectedDay!)}:', style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 8),
+                GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 3,
+                    crossAxisSpacing: 8,
+                    mainAxisSpacing: 8,
+                    childAspectRatio: 2.5,
+                  ),
+                  itemCount: _horariosDoDia.length,
+                  itemBuilder: (context, index) {
+                    final horarioDoc = _horariosDoDia[index];
+                    final Timestamp timestamp = (horarioDoc.data() as Map<String, dynamic>)['timestamp'];
+                    final String horarioTexto = DateFormat('HH:mm').format(timestamp.toDate());
+                    final bool isSelected = _selectedHorarioId == horarioDoc.id;
+
+                    return ElevatedButton(
+                      onPressed: () {
+                        setState(() {
+                          _selectedHorarioId = isSelected ? null : horarioDoc.id;
+                        });
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: isSelected ? Colors.redAccent : Theme.of(context).cardColor,
+                        foregroundColor: isSelected ? Colors.white : Colors.white70,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      ),
+                      child: Text(horarioTexto),
+                    );
+                  },
                 ),
-              )
-                  : DropdownButtonFormField<String>(
-                value: _selectedHorarioId,
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: Theme.of(context).inputDecorationTheme.fillColor,
-                  border: Theme.of(context).inputDecorationTheme.border,
-                  enabledBorder: Theme.of(context).inputDecorationTheme.enabledBorder,
-                  focusedBorder: Theme.of(context).inputDecorationTheme.focusedBorder,
-                ),
-                dropdownColor: Theme.of(context).cardColor,
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Colors.white),
-                iconEnabledColor: Colors.white70,
-                validator: (value) => value == null ? 'Selecione um horário' : null,
-                items: _horariosDisponiveisVeterinario.map<DropdownMenuItem<String>>((horario) {
-                  final DateTime date = DateTime.parse(horario['data']);
-                  final String formattedDate = DateFormat('dd/MM/yyyy').format(date);
-                  return DropdownMenuItem<String>(
-                    value: horario['id'],
-                    child: Text('$formattedDate às ${horario['hora']}'),
-                  );
-                }).toList(),
-                onChanged: (String? newValue) {
-                  setState(() {
-                    _selectedHorarioId = newValue;
-                  });
-                },
-              ),
+              ],
               const SizedBox(height: 20),
 
+              // Campo de "Mais Informações"
               CustomTextField(
                 controller: _motivoController,
-                hintText: 'Motivo da Consulta',
+                hintText: 'Mais informações sobre a consulta',
+                labelText: 'Mais Informações',
                 maxLines: 3,
-                validator: (value) => value!.isEmpty ? 'Informe o motivo' : null,
               ),
               const SizedBox(height: 40),
 
@@ -416,6 +342,87 @@ class _TelaAgendamentoDonoState extends State<TelaAgendamentoDono> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildDropdown(String label, List<Map<String, dynamic>> items, Function(String?) onChanged) {
+    if (items.isEmpty) {
+      return Center(child: Text(label, style: Theme.of(context).textTheme.bodyLarge));
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(label, style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          value: items.first['id'],
+          decoration: InputDecoration(
+            hintStyle: Theme.of(context).inputDecorationTheme.hintStyle,
+          ),
+          dropdownColor: Theme.of(context).cardColor,
+          items: items.map<DropdownMenuItem<String>>((item) {
+            return DropdownMenuItem<String>(
+              value: item['id'],
+              child: Text(item['nome']!),
+            );
+          }).toList(),
+          onChanged: onChanged,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCalendar() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text('Selecione a Data:', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 8),
+        TableCalendar(
+          focusedDay: _selectedDay ?? DateTime.now(),
+          firstDay: DateTime.now(),
+          lastDay: DateTime.utc(2030, 1, 31),
+          locale: 'pt_BR',
+          selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
+          onDaySelected: _onDaySelected,
+          onPageChanged: (focusedDay) {
+            // Pode ser usado para carregar mais horários se necessário
+          },
+          calendarBuilders: CalendarBuilders(
+            defaultBuilder: (context, day, focusedDay) {
+              final hasEvents = _horariosPorDia.containsKey(DateTime.utc(day.year, day.month, day.day));
+              final isToday = isSameDay(day, DateTime.now());
+              final isSelected = isSameDay(_selectedDay, day);
+
+              return Container(
+                margin: const EdgeInsets.all(6.0),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: isSelected ? Colors.redAccent : (hasEvents ? Colors.grey[800] : Colors.grey[800]?.withOpacity(0.5)),
+                  borderRadius: BorderRadius.circular(8.0),
+                ),
+                child: Text(
+                  '${day.day}',
+                  style: TextStyle(
+                    color: hasEvents || isSelected ? Colors.white : Colors.white38,
+                  ),
+                ),
+              );
+            },
+          ),
+          headerStyle: HeaderStyle(
+            formatButtonVisible: false,
+            titleCentered: true,
+            titleTextStyle: Theme.of(context).textTheme.headlineSmall!.copyWith(color: Colors.white),
+            leftChevronIcon: const Icon(Icons.chevron_left, color: Colors.white),
+            rightChevronIcon: const Icon(Icons.chevron_right, color: Colors.white),
+          ),
+          calendarStyle: CalendarStyle(
+            weekendTextStyle: Theme.of(context).textTheme.bodyMedium!.copyWith(color: Colors.white70),
+            defaultTextStyle: Theme.of(context).textTheme.bodyMedium!.copyWith(color: Colors.white),
+          ),
+        ),
+      ],
     );
   }
 }

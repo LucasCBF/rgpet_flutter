@@ -1,10 +1,8 @@
-// lib/screens/tela_gerenciar_horarios_veterinario.dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:table_calendar/table_calendar.dart';
 import 'package:intl/intl.dart';
-import 'package:rgpet/widgets/custom_button.dart';
-import 'package:rgpet/widgets/custom_text_field.dart';
 
 class TelaGerenciarHorariosVeterinario extends StatefulWidget {
   const TelaGerenciarHorariosVeterinario({super.key});
@@ -17,32 +15,19 @@ class _TelaGerenciarHorariosVeterinarioState extends State<TelaGerenciarHorarios
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  final TextEditingController _dataController = TextEditingController();
-  final TextEditingController _horaController = TextEditingController();
-  DateTime? _selectedDate;
-
   String? _veterinarioId;
-  // Mude para um Stream<QuerySnapshot> para ouvir em tempo real
-  Stream<QuerySnapshot>? _horariosStream; // NOVO: Stream para horários
-
   bool _isLoading = true;
   String? _errorMessage;
+
+  DateTime _focusedDay = DateTime.now();
 
   @override
   void initState() {
     super.initState();
-    _loadVeterinarioIdAndSetupStream(); // Mude o nome da função
+    _loadVeterinarioId();
   }
 
-  @override
-  void dispose() {
-    _dataController.dispose();
-    _horaController.dispose();
-    super.dispose();
-  }
-
-  // Mude para configurar o stream
-  Future<void> _loadVeterinarioIdAndSetupStream() async {
+  Future<void> _loadVeterinarioId() async {
     final user = _auth.currentUser;
     if (user == null) {
       setState(() {
@@ -52,296 +37,321 @@ class _TelaGerenciarHorariosVeterinarioState extends State<TelaGerenciarHorarios
       return;
     }
     _veterinarioId = user.uid;
-
-    // Configura o stream para ouvir as mudanças em tempo real
-    _horariosStream = _firestore
-        .collection('horariosDisponiveis')
-        .where('veterinarioId', isEqualTo: _veterinarioId)
-        .orderBy('timestamp', descending: false)
-        .snapshots(); // Ouve em tempo real
-
     setState(() {
       _isLoading = false;
     });
   }
 
-  Future<void> _selectDate(BuildContext context) async {
-    DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: _selectedDate ?? DateTime.now(),
-      firstDate: DateTime.now(),
-      lastDate: DateTime(2028),
-      builder: (context, child) {
-        return Theme(
-          data: ThemeData.dark().copyWith(
-            colorScheme: const ColorScheme.dark(
-              primary: Colors.redAccent,
-              onPrimary: Colors.white,
-              surface: Color(0xFF2A2A3E),
-              onSurface: Colors.white,
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(backgroundColor: Color(0xFF1E1E2C), body: Center(child: CircularProgressIndicator()));
+    }
+    if (_errorMessage != null) {
+      return Scaffold(backgroundColor: const Color(0xFF1E1E2C), body: Center(child: Text(_errorMessage!, style: const TextStyle(color: Colors.white))));
+    }
+
+    return Scaffold(
+      backgroundColor: const Color(0xFF1E1E2C),
+      appBar: AppBar(
+        title: const Text('Gerenciar Agenda', style: TextStyle(color: Colors.white)),
+        backgroundColor: const Color(0xFF1E1E2C),
+        iconTheme: const IconThemeData(color: Colors.white),
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          children: [
+            const Text('Horários Agendados:', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 16),
+            StreamBuilder<QuerySnapshot>(
+              stream: _firestore.collection('horariosDisponiveis').where('veterinarioId', isEqualTo: _veterinarioId).snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                final eventos = snapshot.data!.docs.map((doc) => doc.data() as Map<String, dynamic>).toList();
+                
+                final Map<DateTime, List<dynamic>> horariosPorDia = {};
+                for (var horario in eventos) {
+                  final DateTime timestamp = (horario['timestamp'] as Timestamp).toDate();
+                  final DateTime day = DateTime.utc(timestamp.year, timestamp.month, timestamp.day);
+                  if (!horariosPorDia.containsKey(day)) {
+                    horariosPorDia[day] = [];
+                  }
+                  horariosPorDia[day]!.add(horario);
+                }
+
+                return TableCalendar(
+                  focusedDay: _focusedDay,
+                  firstDay: DateTime.now(),
+                  lastDay: DateTime.utc(2030, 1, 31),
+                  locale: 'pt_BR',
+                  onDaySelected: (day, focusedDay) {
+                    setState(() {
+                      _focusedDay = focusedDay;
+                    });
+                  },
+                  calendarBuilders: CalendarBuilders(
+                    defaultBuilder: (context, day, focusedDay) {
+                      final hasAgendado = horariosPorDia[day]?.any((h) => h['isAgendado'] == true) ?? false;
+                      final hasBloqueado = horariosPorDia[day]?.any((h) => h['isBloqueado'] == true) ?? false;
+                      final hasDisponivel = horariosPorDia[day]?.any((h) => h['isAgendado'] == false && h['isBloqueado'] == false) ?? false;
+                      
+                      Color color;
+                      if (hasAgendado) {
+                        color = Colors.green[800]!;
+                      } else if (hasBloqueado) {
+                        color = Colors.red[800]!;
+                      } else if (hasDisponivel) {
+                        color = Colors.grey[800]!;
+                      } else {
+                        color = Colors.grey[800]!.withOpacity(0.5);
+                      }
+                      
+                      return Container(
+                        margin: const EdgeInsets.all(6.0),
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(8.0)),
+                        child: Text('${day.day}', style: const TextStyle(color: Colors.white)),
+                      );
+                    },
+                    markerBuilder: (context, day, events) {
+                      if (events.isNotEmpty) {
+                        return Positioned(
+                          right: 1,
+                          bottom: 1,
+                          child: Container(
+                            width: 6,
+                            height: 6,
+                            decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+                          ),
+                        );
+                      }
+                      return null;
+                    },
+                  ),
+                );
+              },
             ),
-            dialogBackgroundColor: const Color(0xFF1E1E2C),
-          ),
-          child: child!,
-        );
-      },
+            const SizedBox(height: 32),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFFDC03D),
+                minimumSize: const Size.fromHeight(50),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (context) => const GerarHorariosScreen()),
+                );
+              },
+              child: const Text('Gerar Horários', style: TextStyle(fontSize: 18, color: Color(0xFF1E1E2C))),
+            ),
+          ],
+        ),
+      ),
     );
-    if (picked != null) {
-      setState(() {
-        _selectedDate = picked;
-        _dataController.text = DateFormat('dd/MM/yyyy').format(picked);
-      });
-    }
+  }
+}
+
+// NOVA TELA: GerarHorariosScreen
+class GerarHorariosScreen extends StatefulWidget {
+  const GerarHorariosScreen({super.key});
+
+  @override
+  State<GerarHorariosScreen> createState() => _GerarHorariosScreenState();
+}
+
+class _GerarHorariosScreenState extends State<GerarHorariosScreen> {
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+  String? _veterinarioId;
+
+  DateTime _focusedDay = DateTime.now();
+  DateTime? _rangeStart;
+  DateTime? _rangeEnd;
+  final RangeSelectionMode _rangeSelectionMode = RangeSelectionMode.enforced;
+
+  final Set<int> _selectedDaysOfWeek = {}; // 1 = Seg, 7 = Dom
+  final List<String> _diasDaSemana = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
+
+  TimeOfDay? _inicioJornada;
+  TimeOfDay? _fimJornada;
+
+  // NOVO: Apenas uma pausa com início e fim
+  TimeOfDay? _inicioPausa;
+  TimeOfDay? _fimPausa;
+
+  @override
+  void initState() {
+    super.initState();
+    _veterinarioId = _auth.currentUser?.uid;
   }
 
-  Future<void> _addHorario() async {
-    if (_selectedDate == null || _horaController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Por favor, selecione a data e a hora.')),
-      );
-      return;
-    }
-
-    if (_veterinarioId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Erro: ID do veterinário não encontrado.')),
-      );
-      return;
-    }
-
-    final timeParts = _horaController.text.split(':');
-    if (timeParts.length != 2 || int.tryParse(timeParts[0]) == null || int.tryParse(timeParts[1]) == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Formato de hora inválido. Use HH:MM.')),
-      );
-      return;
-    }
-
-    final String formattedDate = DateFormat('yyyy-MM-dd').format(_selectedDate!);
-    final String formattedTime = _horaController.text.trim();
-
-    final DateTime combinedDateTime = DateTime(
-      _selectedDate!.year,
-      _selectedDate!.month,
-      _selectedDate!.day,
-      int.parse(timeParts[0]),
-      int.parse(timeParts[1]),
-    );
-
-    try {
-      await _firestore.collection('horariosDisponiveis').add({
-        'veterinarioId': _veterinarioId,
-        'data': formattedDate,
-        'hora': formattedTime,
-        'timestamp': Timestamp.fromDate(combinedDateTime),
-        'isAgendado': false,
-        'donoUidAgendamento': null,
-        'petIdAgendamento': null,
-        'consultaId': null,
-      });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Horário adicionado com sucesso!')),
-        );
-        _horaController.clear(); // Limpa o campo da hora
-        // Não precisa mais chamar _loadHorariosDisponiveis(), o StreamBuilder faz isso
+  void _onDaySelected(DateTime selectedDay, DateTime focusedDay) {
+    setState(() {
+      _focusedDay = focusedDay;
+      if (_rangeStart != null && _rangeEnd == null) {
+        _rangeEnd = selectedDay;
+        if (_rangeEnd!.isBefore(_rangeStart!)) {
+          final temp = _rangeStart;
+          _rangeStart = _rangeEnd;
+          _rangeEnd = temp;
+        }
+      } else {
+        _rangeStart = selectedDay;
+        _rangeEnd = null;
       }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erro ao adicionar horário: ${e.toString()}')),
-        );
-      }
-      print('Erro ao adicionar horário: $e');
-    }
+    });
   }
 
-  Future<void> _removeHorario(String horarioId, bool isAgendado) async {
-    if (isAgendado) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Não é possível remover um horário já agendado.')),
-      );
+  void _toggleDay(int day) {
+    setState(() {
+      if (_selectedDaysOfWeek.contains(day)) {
+        _selectedDaysOfWeek.remove(day);
+      } else {
+        _selectedDaysOfWeek.add(day);
+      }
+    });
+  }
+  
+  Future<void> _gerarHorarios() async {
+    if (_veterinarioId == null || _rangeStart == null || _rangeEnd == null || _inicioJornada == null || _fimJornada == null) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Preencha todos os campos obrigatórios.')));
       return;
     }
-    try {
-      await _firestore.collection('horariosDisponiveis').doc(horarioId).delete();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Horário removido com sucesso!')),
-        );
-        // Não precisa mais chamar _loadHorariosDisponiveis(), o StreamBuilder faz isso
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Gerando horários...')));
+
+    final int duracaoSlotMinutos = 30;
+
+    for (var dia = _rangeStart!; dia.isBefore(_rangeEnd!.add(const Duration(days: 1))); dia = dia.add(const Duration(days: 1))) {
+      if (!_selectedDaysOfWeek.contains(dia.weekday)) {
+        continue;
       }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erro ao remover horário: ${e.toString()}')),
-        );
+      
+      final DateTime inicioDia = DateTime(dia.year, dia.month, dia.day, _inicioJornada!.hour, _inicioJornada!.minute);
+      final DateTime fimDia = DateTime(dia.year, dia.month, dia.day, _fimJornada!.hour, _fimJornada!.minute);
+      
+      DateTime horaAtual = inicioDia;
+      while (horaAtual.isBefore(fimDia)) {
+        bool isPausa = (_inicioPausa != null && _fimPausa != null) &&
+            (horaAtual.isAfter(DateTime(dia.year, dia.month, dia.day, _inicioPausa!.hour, _inicioPausa!.minute)) &&
+             horaAtual.isBefore(DateTime(dia.year, dia.month, dia.day, _fimPausa!.hour, _fimPausa!.minute)));
+        
+        if (!isPausa) {
+          final existingDocs = await _firestore.collection('horariosDisponiveis').where('veterinarioId', isEqualTo: _veterinarioId).where('timestamp', isEqualTo: Timestamp.fromDate(horaAtual)).limit(1).get();
+          if (existingDocs.docs.isEmpty) {
+            await _firestore.collection('horariosDisponiveis').add({
+              'veterinarioId': _veterinarioId,
+              'timestamp': Timestamp.fromDate(horaAtual),
+              'isAgendado': false,
+              'isBloqueado': false,
+            });
+          }
+        }
+        horaAtual = horaAtual.add(Duration(minutes: duracaoSlotMinutos));
       }
-      print('Erro ao remover horário: $e');
+    }
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Horários gerados com sucesso!')));
+      Navigator.of(context).pop();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return const Scaffold(
-        backgroundColor: Color(0xFF1E1E2C),
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
-
-    if (_errorMessage != null) {
-      return Scaffold(
-        backgroundColor: const Color(0xFF1E1E2C),
-        appBar: AppBar(
-          title: const Text('Gerenciar Horários'),
-          backgroundColor: const Color(0xFF1E1E2C),
-          foregroundColor: Colors.white,
-        ),
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Text(
-              _errorMessage!,
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Colors.redAccent),
-              textAlign: TextAlign.center,
-            ),
-          ),
-        ),
-      );
-    }
-
     return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      backgroundColor: const Color(0xFF1E1E2C),
       appBar: AppBar(
-        title: Text(
-          'Gerenciar Horários',
-          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-            color: Colors.redAccent,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
+        title: const Text('Gerar Horários', style: TextStyle(color: Colors.white)),
+        backgroundColor: const Color(0xFF1E1E2C),
+        iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24.0),
+        padding: const EdgeInsets.all(16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(
-              'Adicionar Novo Horário:',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(color: Colors.white),
-            ),
+            const Text('1. Selecione o período:', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
-            CustomTextField(
-              controller: _dataController,
-              hintText: 'Data',
-              readOnly: true,
-              onTap: () => _selectDate(context),
-              validator: (value) => value!.isEmpty ? 'Selecione a data' : null,
+            TableCalendar(
+              focusedDay: _focusedDay,
+              firstDay: DateTime.now(),
+              lastDay: DateTime.utc(2030, 1, 31),
+              locale: 'pt_BR',
+              rangeStartDay: _rangeStart,
+              rangeEndDay: _rangeEnd,
+              rangeSelectionMode: _rangeSelectionMode,
+              onDaySelected: _onDaySelected,
             ),
+            const SizedBox(height: 24),
+            const Text('2. Selecione os dias da semana:', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
-            CustomTextField(
-              controller: _horaController,
-              hintText: 'Hora (HH:MM)',
-              keyboardType: TextInputType.datetime,
-              validator: (value) {
-                if (value!.isEmpty) return 'Informe a hora';
-                final regex = RegExp(r'^([01]\d|2[0-3]):([0-5]\d)$');
-                if (!regex.hasMatch(value)) return 'Formato inválido (HH:MM)';
-                return null;
-              },
+            Wrap(
+              spacing: 8.0,
+              children: List.generate(_diasDaSemana.length, (index) {
+                final int weekday = index + 1; // 1 = Seg, 7 = Dom
+                final bool isSelected = _selectedDaysOfWeek.contains(weekday);
+                return ActionChip(
+                  label: Text(_diasDaSemana[index]),
+                  backgroundColor: isSelected ? Colors.redAccent : Colors.grey[700],
+                  onPressed: () => _toggleDay(weekday),
+                  labelStyle: TextStyle(color: isSelected ? Colors.white : Colors.white70),
+                );
+              }),
             ),
-            const SizedBox(height: 20),
-            CustomButton(
-              text: 'Adicionar Horário',
-              backgroundColor: const Color(0xFFFDC03D),
-              onPressed: _addHorario,
+            const SizedBox(height: 24),
+            const Text('3. Defina o intervalo de atendimento:', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(child: _buildTimePickerField('Início', _inicioJornada, (time) => setState(() => _inicioJornada = time))),
+                const SizedBox(width: 16),
+                Expanded(child: _buildTimePickerField('Fim', _fimJornada, (time) => setState(() => _fimJornada = time))),
+              ],
+            ),
+            const SizedBox(height: 24),
+            // NOVO: O formato do item 4
+            const Text('4. Defina o intervalo de pausa:', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(child: _buildTimePickerField('Início', _inicioPausa, (time) => setState(() => _inicioPausa = time))),
+                const SizedBox(width: 16),
+                Expanded(child: _buildTimePickerField('Fim', _fimPausa, (time) => setState(() => _fimPausa = time))),
+              ],
             ),
             const SizedBox(height: 40),
-            Text(
-              'Meus Horários Disponíveis:',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(color: Colors.white),
-            ),
-            const SizedBox(height: 16),
-            // Use StreamBuilder para exibir a lista de horários
-            StreamBuilder<QuerySnapshot>(
-              stream: _horariosStream, // Escuta o stream de horários
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-
-                if (snapshot.hasError) {
-                  return Center(
-                    child: Text(
-                      'Erro ao carregar horários: ${snapshot.error}',
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Colors.redAccent),
-                      textAlign: TextAlign.center,
-                    ),
-                  );
-                }
-
-                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                  return Center(
-                    child: Text(
-                      'Nenhum horário disponível adicionado ainda.',
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Colors.white70),
-                      textAlign: TextAlign.center,
-                    ),
-                  );
-                }
-
-                // Converte os documentos em uma lista para exibição
-                final horarios = snapshot.data!.docs.map((doc) {
-                  final data = doc.data() as Map<String, dynamic>;
-                  return {
-                    'id': doc.id,
-                    'data': data['data'],
-                    'hora': data['hora'],
-                    'isAgendado': data['isAgendado'] ?? false,
-                  };
-                }).toList();
-
-                return ListView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: horarios.length,
-                  itemBuilder: (context, index) {
-                    final horario = horarios[index];
-                    final String formattedDate = DateFormat('dd/MM/yyyy').format(DateTime.parse(horario['data']));
-                    
-                    return Card(
-                      color: horario['isAgendado'] ? Colors.grey[700] : Colors.grey[800],
-                      margin: const EdgeInsets.symmetric(vertical: 8),
-                      child: ListTile(
-                        title: Text(
-                          '$formattedDate às ${horario['hora']}',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                            color: horario['isAgendado'] ? Colors.white54 : Colors.white,
-                            decoration: horario['isAgendado'] ? TextDecoration.lineThrough : TextDecoration.none,
-                          ),
-                        ),
-                        subtitle: horario['isAgendado']
-                            ? Text(
-                                'Agendado',
-                                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.redAccent),
-                              )
-                            : null,
-                        trailing: horario['isAgendado']
-                            ? const Icon(Icons.check_circle, color: Colors.green)
-                            : IconButton(
-                                icon: const Icon(Icons.delete, color: Colors.red),
-                                onPressed: () => _removeHorario(horario['id'], horario['isAgendado']),
-                              ),
-                      ),
-                    );
-                  },
-                );
-              },
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFFDC03D),
+                minimumSize: const Size.fromHeight(50),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              onPressed: _gerarHorarios,
+              child: const Text('Gerar Horários', style: TextStyle(fontSize: 18, color: Color(0xFF1E1E2C))),
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildTimePickerField(String label, TimeOfDay? selectedTime, Function(TimeOfDay?) onTap) {
+    return InkWell(
+      onTap: () async {
+        final picked = await showTimePicker(context: context, initialTime: selectedTime ?? TimeOfDay.now());
+        if (picked != null) onTap(picked);
+      },
+      child: InputDecorator(
+        decoration: InputDecoration(
+          labelText: label,
+          labelStyle: const TextStyle(color: Colors.white70),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+        child: Text(selectedTime?.format(context) ?? 'Selecionar', style: const TextStyle(color: Colors.white)),
       ),
     );
   }

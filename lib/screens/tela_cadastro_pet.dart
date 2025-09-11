@@ -100,7 +100,7 @@ class _TelaCadastroPetState extends State<TelaCadastroPet> {
                     return 'Por favor, insira o nome do pet.';
                   }
                   return null;
-                },
+                }, labelText: '',
               ),
               const SizedBox(height: 20),
               CustomTextField(
@@ -111,7 +111,7 @@ class _TelaCadastroPetState extends State<TelaCadastroPet> {
                     return 'Por favor, insira a raça do pet.';
                   }
                   return null;
-                },
+                }, labelText: '',
               ),
               const SizedBox(height: 20),
               CustomTextField(
@@ -126,7 +126,7 @@ class _TelaCadastroPetState extends State<TelaCadastroPet> {
                     return 'Por favor, insira um número válido para a idade.';
                   }
                   return null;
-                },
+                }, labelText: '',
               ),
               const SizedBox(height: 20),
               CustomTextField(
@@ -137,7 +137,7 @@ class _TelaCadastroPetState extends State<TelaCadastroPet> {
                     return 'Por favor, insira o tipo de animal.';
                   }
                   return null;
-                },
+                }, labelText: '',
               ),
               const SizedBox(height: 20),
               CustomTextField(
@@ -152,7 +152,7 @@ class _TelaCadastroPetState extends State<TelaCadastroPet> {
                     return 'Por favor, insira um número válido para o peso.';
                   }
                   return null;
-                },
+                }, labelText: '',
               ),
               const SizedBox(height: 40),
               CustomButton(

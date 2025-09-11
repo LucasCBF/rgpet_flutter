@@ -237,7 +237,7 @@ class _VeterinarioHomePageContentState extends State<_VeterinarioHomePageContent
               _buildActionButton(
                 context,
                 icon: Icons.calendar_month,
-                label: 'Gerenciar Horários',
+                label: 'Gerenciar Agenda',
                 onPressed: () { // MUDANÇA: de onTap para onPressed
                   Navigator.of(context).pushNamed('/gerenciar_horarios_veterinario');
                 },

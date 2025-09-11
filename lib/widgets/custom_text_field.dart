@@ -1,4 +1,3 @@
-// lib/widgets/custom_text_field.dart
 import 'package:flutter/material.dart';
 
 class CustomTextField extends StatelessWidget {
@@ -20,7 +19,7 @@ class CustomTextField extends StatelessWidget {
     this.validator,
     this.readOnly = false, // Padrão é false
     this.onTap, // Pode ser nulo
-    this.maxLines = 1, // Padrão é 1 linha
+    this.maxLines = 1, required String labelText, // Padrão é 1 linha
   });
 
   @override
