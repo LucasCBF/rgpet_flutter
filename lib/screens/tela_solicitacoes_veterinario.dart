@@ -2,7 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:intl/intl.dart'; // Para formatar datas
+import 'package:intl/intl.dart';
 
 class TelaSolicitacoesVeterinario extends StatefulWidget {
   const TelaSolicitacoesVeterinario({super.key});
@@ -26,133 +26,100 @@ class _TelaSolicitacoesVeterinarioState extends State<TelaSolicitacoesVeterinari
   }
 
   void _setupSolicitacoesStream() {
-    // Ouve as solicitações de consulta (status 'pendente') para este veterinário
     _solicitacoesStream = _firestore
         .collection('consultas')
         .where('veterinarioId', isEqualTo: _currentUser!.uid)
-        .where('status', isEqualTo: 'pendente') // Filtra por consultas pendentes
-        .orderBy('dataAgendamento', descending: true) // Ordena pelas mais recentes
+        .where('status', isEqualTo: 'pendente')
+        .orderBy('dataAgendamento', descending: true)
         .snapshots();
   }
 
-  // Função para buscar o nome do pet e dono
-  Future<Map<String, String>> _fetchPetAndDonoNames(String petId, String donoUid) async {
-    String petName = 'Pet Desconhecido';
-    String donoName = 'Dono Desconhecido';
+  void _showSolicitacaoPopup(BuildContext context, Map<String, dynamic> consultaData, String consultaId) {
+    final Timestamp dataHoraTimestamp = consultaData['dataHoraConsulta'];
+    final String dataFormatada = DateFormat('dd/MM/yyyy').format(dataHoraTimestamp.toDate());
+    final String horaFormatada = DateFormat('HH:mm').format(dataHoraTimestamp.toDate());
 
-    try {
-      // Busca o nome do pet
-      DocumentSnapshot petDoc = await _firestore
-          .collection('donos')
-          .doc(donoUid)
-          .collection('pets')
-          .doc(petId)
-          .get();
-
-      if (petDoc.exists) {
-        petName = (petDoc.data() as Map<String, dynamic>)['nome'] ?? 'Pet sem nome';
-      }
-
-      // Busca o nome do dono
-      DocumentSnapshot donoDoc = await _firestore
-          .collection('donos')
-          .doc(donoUid)
-          .get();
-
-      if (donoDoc.exists) {
-        donoName = (donoDoc.data() as Map<String, dynamic>)['nomeCompleto'] ?? 'Dono sem nome';
-      }
-
-    } catch (e) {
-      print('Erro ao buscar nome do pet/dono para solicitação: $e');
-    }
-    return {'petName': petName, 'donoName': donoName};
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF2A2A3E),
+          title: const Text('Solicitação de Consulta', style: TextStyle(color: Colors.white)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Pet: ${consultaData['petNome']} (Dono: ${consultaData['donoNome']})', style: const TextStyle(color: Colors.white70)),
+              Text('Procedimento: ${consultaData['procedimento']}', style: const TextStyle(color: Colors.white)),
+              Text('Data: $dataFormatada às $horaFormatada', style: const TextStyle(color: Colors.white70)),
+              Text('Motivo: ${consultaData['motivoConsulta']}', style: const TextStyle(color: Colors.white70)),
+              const SizedBox(height: 16),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _confirmarRejeitarConsulta(consultaId, consultaData['horariosAgendadosIds'], 'rejeitada');
+              },
+              child: const Text('Rejeitar', style: TextStyle(color: Colors.red)),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _confirmarRejeitarConsulta(consultaId, consultaData['horariosAgendadosIds'], 'confirmada');
+              },
+              child: const Text('Confirmar', style: TextStyle(color: Colors.green)),
+            ),
+          ],
+        );
+      },
+    );
   }
 
-  // Função para confirmar uma consulta
-  Future<void> _confirmarConsulta(String consultaId, String horarioDisponivelId, String donoUid, String petId, String dataConsulta, String horaConsulta) async {
+  Future<void> _confirmarRejeitarConsulta(String consultaId, List<dynamic> horariosIds, String novoStatus) async {
     try {
-      await _firestore.collection('consultas').doc(consultaId).update({
-        'status': 'confirmado',
-      });
+      WriteBatch batch = _firestore.batch();
+      
+      DocumentReference consultaRef = _firestore.collection('consultas').doc(consultaId);
+      batch.update(consultaRef, {'status': novoStatus});
 
-      // Notificar o dono (opcional, mas recomendado para o futuro)
-      // await _firestore.collection('notificacoesDono').add({
-      //   'donoUid': donoUid,
-      //   'tipo': 'consulta_confirmada',
-      //   'mensagem': 'Sua consulta para $petName em $dataConsulta às $horaConsulta foi confirmada.',
-      //   'lida': false,
-      //   'timestamp': FieldValue.serverTimestamp(),
-      //   'consultaId': consultaId,
-      // });
+      if (novoStatus == 'rejeitada') {
+        for (String horarioId in horariosIds.cast<String>()) {
+          DocumentReference horarioRef = _firestore.collection('horariosDisponiveis').doc(horarioId);
+          batch.update(horarioRef, {
+            'isAgendado': false,
+            'donoUidAgendamento': null,
+            'petIdAgendamento': null,
+            'consultaId': null,
+          });
+        }
+      }
 
-      // Atualiza a notificação do veterinário como lida ou a remove se for específica para aprovação
       QuerySnapshot notifs = await _firestore.collection('notificacoesVeterinario')
           .where('consultaId', isEqualTo: consultaId)
           .limit(1)
           .get();
       if (notifs.docs.isNotEmpty) {
-        await _firestore.collection('notificacoesVeterinario').doc(notifs.docs.first.id).update({'lida': true});
-        // Ou, se a notificação é só para solicitação, pode-se deletá-la:
-        // await _firestore.collection('notificacoesVeterinario').doc(notifs.docs.first.id).delete();
+        DocumentReference notifRef = _firestore.collection('notificacoesVeterinario').doc(notifs.docs.first.id);
+        batch.delete(notifRef);
       }
-
+      
+      await batch.commit();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Consulta confirmada com sucesso!')),
+          SnackBar(content: Text('Consulta $novoStatus com sucesso!')),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erro ao confirmar consulta: ${e.toString()}')),
+          SnackBar(content: Text('Erro ao atualizar status: ${e.toString()}')),
         );
       }
-      print('Erro ao confirmar consulta: $e');
     }
   }
-
-  // Função para rejeitar uma consulta
-  Future<void> _rejeitarConsulta(String consultaId, String horarioDisponivelId) async {
-    try {
-      // Altera o status da consulta para 'rejeitada'
-      await _firestore.collection('consultas').doc(consultaId).update({
-        'status': 'rejeitada',
-      });
-
-      // Libera o horário na agenda do veterinário, marcando isAgendado para false novamente
-      await _firestore.collection('horariosDisponiveis').doc(horarioDisponivelId).update({
-        'isAgendado': false,
-        'donoUidAgendamento': null,
-        'petIdAgendamento': null,
-        'consultaId': null,
-      });
-
-      // Atualiza a notificação do veterinário como lida ou a remove
-      QuerySnapshot notifs = await _firestore.collection('notificacoesVeterinario')
-          .where('consultaId', isEqualTo: consultaId)
-          .limit(1)
-          .get();
-      if (notifs.docs.isNotEmpty) {
-        await _firestore.collection('notificacoesVeterinario').doc(notifs.docs.first.id).update({'lida': true});
-      }
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Consulta rejeitada. Horário liberado.')),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Erro ao rejeitar consulta: ${e.toString()}')),
-        );
-      }
-      print('Erro ao rejeitar consulta: $e');
-    }
-  }
-
 
   @override
   Widget build(BuildContext context) {
@@ -203,7 +170,7 @@ class _TelaSolicitacoesVeterinarioState extends State<TelaSolicitacoesVeterinari
               ),
             );
           }
-
+          
           return ListView.builder(
             padding: const EdgeInsets.all(16.0),
             itemCount: snapshot.data!.docs.length,
@@ -212,100 +179,26 @@ class _TelaSolicitacoesVeterinarioState extends State<TelaSolicitacoesVeterinari
               var consulta = consultaDoc.data() as Map<String, dynamic>;
               String consultaId = consultaDoc.id;
 
-              String dataConsulta = consulta['dataConsulta'] ?? 'N/A';
-              String horaConsulta = consulta['horaConsulta'] ?? 'N/A';
-              String motivoConsulta = consulta['motivoConsulta'] ?? 'Motivo não informado';
-              String petId = consulta['petId'] ?? '';
-              String donoUid = consulta['donoUid'] ?? '';
-              String horarioDisponivelId = consulta['horarioDisponivelId'] ?? '';
+              String petName = consulta['petNome'] ?? 'Pet Desconhecido';
+              String donoName = consulta['donoNome'] ?? 'Dono Desconhecido';
+              String procedimento = consulta['procedimento'] ?? 'Procedimento não especificado';
 
+              final dataHoraTimestamp = consulta['dataHoraConsulta'] as Timestamp?;
+              final String dataHoraFormatada = dataHoraTimestamp != null 
+                ? DateFormat('dd/MM/yyyy HH:mm').format(dataHoraTimestamp.toDate()) 
+                : 'Data não encontrada';
 
-              String formattedDate = dataConsulta;
-              try {
-                formattedDate = DateFormat('dd/MM/yyyy').format(DateTime.parse(dataConsulta));
-              } catch (_) {} // Ignora erro de formato se a data não for um DateTime válido
-
-              return FutureBuilder<Map<String, String>>(
-                future: _fetchPetAndDonoNames(petId, donoUid),
-                builder: (context, nameSnapshot) {
-                  if (nameSnapshot.connectionState == ConnectionState.waiting) {
-                    return Card(
-                      color: Theme.of(context).cardColor,
-                      margin: const EdgeInsets.only(bottom: 16.0),
-                      child: const ListTile(
-                        title: Text('Carregando solicitação...', style: TextStyle(color: Colors.white)),
-                        trailing: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                    );
-                  }
-
-                  String petName = nameSnapshot.data?['petName'] ?? 'Pet';
-                  String donoName = nameSnapshot.data?['donoName'] ?? 'Dono';
-
-                  return Card(
-                    color: Theme.of(context).cardColor,
-                    margin: const EdgeInsets.only(bottom: 16.0),
-                    elevation: 2,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.0)),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Solicitação de Consulta',
-                            style: Theme.of(context).textTheme.titleLarge?.copyWith(color: Colors.white),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            'Pet: $petName (Dono: $donoName)',
-                            style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: Colors.white70),
-                          ),
-                          Text(
-                            'Data: $formattedDate às $horaConsulta',
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.white70),
-                          ),
-                          Text(
-                            'Motivo: $motivoConsulta',
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.white70),
-                          ),
-                          const SizedBox(height: 16),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceAround,
-                            children: [
-                              ElevatedButton.icon(
-                                onPressed: () => _confirmarConsulta(
-                                  consultaId,
-                                  horarioDisponivelId,
-                                  donoUid,
-                                  petId,
-                                  dataConsulta,
-                                  horaConsulta
-                                ),
-                                icon: const Icon(Icons.check, color: Colors.white),
-                                label: Text('Confirmar', style: Theme.of(context).textTheme.labelLarge?.copyWith(color: Colors.white)),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.green, // Cor verde para confirmar
-                                ),
-                              ),
-                              ElevatedButton.icon(
-                                onPressed: () => _rejeitarConsulta(
-                                  consultaId,
-                                  horarioDisponivelId,
-                                ),
-                                icon: const Icon(Icons.close, color: Colors.white),
-                                label: Text('Rejeitar', style: Theme.of(context).textTheme.labelLarge?.copyWith(color: Colors.white)),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.red, // Cor vermelha para rejeitar
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
+              return Card(
+                color: const Color(0xFF2C2C3A),
+                margin: const EdgeInsets.only(bottom: 16.0),
+                elevation: 2,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.0)),
+                child: ListTile(
+                  title: Text('Solicitação de $procedimento', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  subtitle: Text('Pet: $petName (Dono: $donoName)\nData: $dataHoraFormatada', style: const TextStyle(color: Colors.white70)),
+                  trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white70),
+                  onTap: () => _showSolicitacaoPopup(context, consulta, consultaId),
+                ),
               );
             },
           );

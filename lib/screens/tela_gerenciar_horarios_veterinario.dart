@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:table_calendar/table_calendar.dart';
-import 'package:intl/intl.dart';
 
 class TelaGerenciarHorariosVeterinario extends StatefulWidget {
   const TelaGerenciarHorariosVeterinario({super.key});
@@ -106,7 +105,7 @@ class _TelaGerenciarHorariosVeterinarioState extends State<TelaGerenciarHorarios
                       } else if (hasDisponivel) {
                         color = Colors.grey[800]!;
                       } else {
-                        color = Colors.grey[800]!.withOpacity(0.5);
+                        color = Colors.grey[800]!.withValues();
                       }
                       
                       return Container(

@@ -52,13 +52,13 @@ class _TelaHistoricoConsultasState extends State<TelaHistoricoConsultas> {
   Widget build(BuildContext context) {
     if (_veterinarioId == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Histórico de Consultas')),
+        appBar: AppBar(title: const Text('Histórico de Procedimentos')),
         body: const Center(child: Text('Usuário não logado.')),
       );
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Histórico de Consultas')),
+      appBar: AppBar(title: const Text('Histórico de Procedimentos')),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -117,6 +117,7 @@ class _TelaHistoricoConsultasState extends State<TelaHistoricoConsultas> {
                 stream: _firestore
                     .collection('consultas')
                     .where('veterinarioId', isEqualTo: _veterinarioId)
+                    .where('status', isEqualTo: 'confirmada') // FILTRO PARA MOSTRAR APENAS CONFIRMADAS
                     .orderBy('dataAgendamento', descending: true)
                     .snapshots(),
                 builder: (context, snapshot) {
@@ -132,16 +133,14 @@ class _TelaHistoricoConsultasState extends State<TelaHistoricoConsultas> {
 
                   final consultas = snapshot.data!.docs.where((doc) {
                     final data = doc.data() as Map<String, dynamic>;
-                    // Lógica de filtro para o nome
                     final petName = data['petNome']?.toLowerCase() ?? '';
                     final donoName = data['donoNome']?.toLowerCase() ?? '';
                     final nomeFiltroLowerCase = _nomeFiltro.toLowerCase();
+                    
                     final nomeMatch = petName.contains(nomeFiltroLowerCase) || donoName.contains(nomeFiltroLowerCase);
 
-                    // Lógica de filtro para a data
-                    // NOVO: Verificação para garantir que o campo não é nulo antes de tentar converter
                     final dataConsultaTimestamp = data['dataHoraConsulta'] as Timestamp?;
-                    if (dataConsultaTimestamp == null) return false; // Ignora documentos sem data
+                    if (dataConsultaTimestamp == null) return false;
                     final dataConsulta = dataConsultaTimestamp.toDate();
                     final dataMatch = _dataFiltro == null || isSameDay(dataConsulta, _dataFiltro!);
 
@@ -149,7 +148,7 @@ class _TelaHistoricoConsultasState extends State<TelaHistoricoConsultas> {
                   }).toList();
 
                   if (consultas.isEmpty) {
-                    return const Center(child: Text('Nenhuma consulta encontrada.'));
+                    return const Center(child: Text('Nenhuma consulta corresponde aos filtros.'));
                   }
 
                   return ListView.builder(
@@ -163,12 +162,13 @@ class _TelaHistoricoConsultasState extends State<TelaHistoricoConsultas> {
                       
                       final String petNome = consulta['petNome'] ?? 'Pet Desconhecido';
                       final String donoNome = consulta['donoNome'] ?? 'Dono Desconhecido';
+                      final String procedimento = consulta['procedimento'] ?? 'Procedimento não especificado';
 
                       return Card(
                         margin: const EdgeInsets.symmetric(vertical: 8),
                         child: ListTile(
-                          title: Text('Consulta com $petNome'),
-                          subtitle: Text('Dono: $donoNome\nData: $dataFormatada'),
+                          title: Text(procedimento, style: const TextStyle(fontWeight: FontWeight.bold)),
+                          subtitle: Text('Pet: $petNome\nDono: $donoNome\nData: $dataFormatada'),
                           trailing: const Icon(Icons.arrow_forward_ios),
                           onTap: () {
                             // Ação ao clicar: navegar para os detalhes da consulta
@@ -187,7 +187,6 @@ class _TelaHistoricoConsultasState extends State<TelaHistoricoConsultas> {
   }
 }
 
-// Função auxiliar para verificar se duas datas são o mesmo dia
 bool isSameDay(DateTime a, DateTime b) {
   return a.year == b.year && a.month == b.month && a.day == b.day;
 }

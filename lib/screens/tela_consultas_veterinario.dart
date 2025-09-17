@@ -1,7 +1,8 @@
+// lib/screens/tela_consultas_veterinario.dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:intl/intl.dart'; // Para formatar datas
+import 'package:intl/intl.dart';
 
 class TelaConsultasVeterinario extends StatefulWidget {
   const TelaConsultasVeterinario({super.key});
@@ -25,50 +26,14 @@ class _TelaConsultasVeterinarioState extends State<TelaConsultasVeterinario> {
   }
 
   void _setupConsultasStream() {
-    // Ouve as consultas confirmadas para este veterinário
+    // A consulta agora usa o campo 'dataHoraConsulta' para ordenação
     _consultasStream = _firestore
         .collection('consultas')
         .where('veterinarioId', isEqualTo: _currentUser!.uid)
-        .where('status', isEqualTo: 'confirmado') // Filtra por consultas confirmadas
-        .orderBy('dataConsulta') // Ordena por data
-        .orderBy('horaConsulta') // E depois por hora
+        .where('status', isEqualTo: 'confirmada')
+        .orderBy('dataHoraConsulta', descending: false) // CORREÇÃO: Ordena pelo campo Timestamp
         .snapshots();
   }
-
-  // Função para buscar o nome do pet (e do dono, se necessário)
-  Future<Map<String, String>> _fetchPetAndDonoNames(String petId, String donoUid) async {
-    String petName = 'Nome desconhecido';
-    String donoName = 'Dono desconhecido';
-
-    try {
-      // Busca o nome do pet
-      DocumentSnapshot petDoc = await _firestore
-          .collection('donos')
-          .doc(donoUid)
-          .collection('pets')
-          .doc(petId)
-          .get();
-
-      if (petDoc.exists) {
-        petName = (petDoc.data() as Map<String, dynamic>)['nome'] ?? 'Pet sem nome';
-      }
-
-      // Busca o nome do dono
-      DocumentSnapshot donoDoc = await _firestore
-          .collection('donos')
-          .doc(donoUid)
-          .get();
-
-      if (donoDoc.exists) {
-        donoName = (donoDoc.data() as Map<String, dynamic>)['nomeCompleto'] ?? 'Dono sem nome';
-      }
-
-    } catch (e) {
-      print('Erro ao buscar nome do pet/dono: $e');
-    }
-    return {'petName': petName, 'donoName': donoName};
-  }
-
 
   @override
   Widget build(BuildContext context) {
@@ -86,7 +51,7 @@ class _TelaConsultasVeterinarioState extends State<TelaConsultasVeterinario> {
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         title: Text(
-          'Consultas Confirmadas',
+          'Procedimentos Confirmados',
           style: Theme.of(context).textTheme.headlineMedium?.copyWith(
             color: Colors.redAccent,
             fontWeight: FontWeight.bold,
@@ -125,61 +90,38 @@ class _TelaConsultasVeterinarioState extends State<TelaConsultasVeterinario> {
             itemCount: snapshot.data!.docs.length,
             itemBuilder: (context, index) {
               var consulta = snapshot.data!.docs[index].data() as Map<String, dynamic>;
-              String dataConsulta = consulta['dataConsulta'] ?? 'N/A';
-              String horaConsulta = consulta['horaConsulta'] ?? 'N/A';
-              String petId = consulta['petId'] ?? '';
-              String donoUid = consulta['donoUid'] ?? '';
+              
+              // Lendo os nomes e o timestamp diretamente do documento
+              String petName = consulta['petNome'] ?? 'Pet Desconhecido';
+              String donoName = consulta['donoNome'] ?? 'Dono Desconhecido';
+              String procedimento = consulta['procedimento'] ?? 'Procedimento não especificado';
+              
+              final dataHoraTimestamp = consulta['dataHoraConsulta'] as Timestamp?;
+              final dataHora = dataHoraTimestamp?.toDate();
+              final String dataFormatada = dataHora != null ? DateFormat('dd/MM/yyyy HH:mm').format(dataHora) : 'Data não encontrada';
 
-              // Formata a data para exibição
-              String formattedDate = dataConsulta;
-              try {
-                formattedDate = DateFormat('dd/MM/yyyy').format(DateTime.parse(dataConsulta));
-              } catch (_) {} // Ignora erro de formato se a data não for um DateTime válido
-
-              return FutureBuilder<Map<String, String>>(
-                future: _fetchPetAndDonoNames(petId, donoUid),
-                builder: (context, nameSnapshot) {
-                  if (nameSnapshot.connectionState == ConnectionState.waiting) {
-                    return Card(
-                      color: Theme.of(context).cardColor,
-                      margin: const EdgeInsets.only(bottom: 16.0),
-                      child: const ListTile(
-                        title: Text('Carregando consulta...', style: TextStyle(color: Colors.white)),
-                        trailing: CircularProgressIndicator(strokeWidth: 2),
-                      ),
+              return Card(
+                color: Theme.of(context).cardColor,
+                margin: const EdgeInsets.only(bottom: 16.0),
+                elevation: 2,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.0)),
+                child: ListTile(
+                  title: Text(
+                    procedimento,
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(color: Colors.white),
+                  ),
+                  subtitle: Text(
+                    'Pet: $petName\nDono: $donoName\nData: $dataFormatada',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.white70),
+                  ),
+                  trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white70),
+                  onTap: () {
+                    // TODO: Navegar para a tela de detalhes da consulta
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Ver detalhes da consulta de ${petName}')),
                     );
-                  }
-
-                  String petName = nameSnapshot.data?['petName'] ?? 'Pet';
-                  String donoName = nameSnapshot.data?['donoName'] ?? 'Dono';
-
-                  return Card(
-                    color: Theme.of(context).cardColor,
-                    margin: const EdgeInsets.only(bottom: 16.0),
-                    elevation: 2,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.0)),
-                    child: ListTile(
-                      leading: const Icon(Icons.pets, color: Colors.blueAccent, size: 40),
-                      title: Text(
-                        '${petName} (${donoName})', // Nome do Pet (Nome do Dono)
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(color: Colors.white),
-                      ),
-                      subtitle: Text(
-                        '$formattedDate às $horaConsulta',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.white70),
-                      ),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.arrow_forward_ios, color: Colors.white70),
-                        onPressed: () {
-                          // TODO: Navegar para a tela de detalhes da consulta
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Ver detalhes da consulta de ${petName}')),
-                          );
-                        },
-                      ),
-                    ),
-                  );
-                },
+                  },
+                ),
               );
             },
           );

@@ -7,6 +7,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:rgpet/screens/cadastros_screen.dart';
 import 'package:rgpet/screens/cadastro_dono_screen.dart';
 import 'package:rgpet/screens/cadastro_veterinario_screen.dart';
+import 'package:rgpet/screens/tela_consultas_veterinario.dart';
 import 'package:rgpet/screens/tela_inicial_screen.dart';
 import 'package:rgpet/screens/tela_login_screen.dart';
 import 'package:rgpet/screens/tela_dono.dart';
@@ -163,7 +164,8 @@ class MyApp extends StatelessWidget {
         '/dono': (context) => const TelaDono(),
         '/veterinario': (context) => const TelaVeterinario(),
         '/gerenciar_horarios_veterinario': (context) => const TelaGerenciarHorariosVeterinario(),
-        '/historico_consultas': (context) => const TelaHistoricoConsultas(), // NOVO: Rota para o histórico
+        '/historico_consultas': (context) => const TelaHistoricoConsultas(),
+        '/consultas': (context) => const TelaConsultasVeterinario(),
       },
       debugShowCheckedModeBanner: false,
     );
