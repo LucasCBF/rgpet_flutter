@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:rgpet/widgets/custom_button.dart';
 import 'package:rgpet/widgets/custom_text_field.dart';
-import 'package:firebase_auth/firebase_auth.dart'; // Importar Firebase Authentication
-import 'package:cloud_firestore/cloud_firestore.dart'; // Importar Cloud Firestore
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class CadastroDonoScreen extends StatefulWidget {
   const CadastroDonoScreen({super.key});

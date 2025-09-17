@@ -246,7 +246,7 @@ class _VeterinarioHomePageContentState extends State<_VeterinarioHomePageContent
                 context,
                 icon: Icons.pets,
                 label: 'Meus Pacientes',
-                onPressed: () { // MUDANÇA: de onTap para onPressed
+                onPressed: () {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Navegar para Meus Pacientes')),
                   );
@@ -256,17 +256,15 @@ class _VeterinarioHomePageContentState extends State<_VeterinarioHomePageContent
                 context,
                 icon: Icons.history,
                 label: 'Histórico de Consultas',
-                onPressed: () { // MUDANÇA: de onTap para onPressed
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Navegar para Histórico de Consultas')),
-                  );
+                onPressed: () {
+                  Navigator.of(context).pushNamed('/historico_consultas');
                 },
               ),
               _buildActionButton(
                 context,
                 icon: Icons.mail,
                 label: 'Mensagens',
-                onPressed: () { // MUDANÇA: de onTap para onPressed
+                onPressed: () {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Navegar para Mensagens')),
                   );

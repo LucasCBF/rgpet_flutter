@@ -2,9 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter_localizations/flutter_localizations.dart'; // Importe esta linha
-import 'package:intl/date_symbol_data_local.dart'; // Importe esta linha
-
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'package:rgpet/screens/cadastros_screen.dart';
 import 'package:rgpet/screens/cadastro_dono_screen.dart';
 import 'package:rgpet/screens/cadastro_veterinario_screen.dart';
@@ -15,16 +14,15 @@ import 'package:rgpet/screens/tela_veterinario.dart';
 import 'package:rgpet/screens/tela_cadastro_pet.dart';
 import 'package:rgpet/screens/tela_agendamento_dono.dart';
 import 'package:rgpet/screens/tela_gerenciar_horarios_veterinario.dart';
+import 'package:rgpet/screens/tela_historico_consultas.dart';
 
 import 'firebase_options.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // Inicialização do Firebase
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
-  // Inicialização da formatação de data para o locale pt_BR
   await initializeDateFormatting('pt_BR', null);
 
   runApp(const MyApp());
@@ -33,23 +31,20 @@ void main() async {
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-  // Função para determinar a tela inicial com base no tipo de usuário
   Future<Widget> _getInitialScreen() async {
     final user = FirebaseAuth.instance.currentUser;
-    print('[_getInitialScreen] - Usuário atual: ${user?.email}'); // Adicionar
+    print('[_getInitialScreen] - Usuário atual: ${user?.email}');
     if (user == null) {
-      print('[_getInitialScreen] - Usuário nulo, retornando TelaInicialScreen.'); // Adicionar
-      // Se não há usuário logado, retorna a tela inicial de boas-vindas
-      return const TelaInicialScreen(); // Volta para a sua tela inicial
+      print('[_getInitialScreen] - Usuário nulo, retornando TelaInicialScreen.');
+      return const TelaInicialScreen();
     } else {
-      // Se há um usuário logado, tenta buscar o tipo no Firestore
       try {
         DocumentSnapshot userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-        print('[_getInitialScreen] - Documento do usuário existe: ${userDoc.exists}'); // Adicionar
+        print('[_getInitialScreen] - Documento do usuário existe: ${userDoc.exists}');
         if (userDoc.exists) {
           final userData = userDoc.data() as Map<String, dynamic>;
           final userType = userData['tipoUsuario'];
-          print('[_getInitialScreen] - Tipo de usuário: $userType'); // Adicionar
+          print('[_getInitialScreen] - Tipo de usuário: $userType');
 
           if (userType == 'dono') {
             return const TelaDono();
@@ -57,16 +52,13 @@ class MyApp extends StatelessWidget {
             return const TelaVeterinario();
           }
         }
-        // Se o documento não existir ou não tiver o tipo de usuário,
-        // pode ser um erro ou um usuário antigo sem o campo.
-        // O ideal é deslogar e ir para a tela de login/cadastro para corrigir.
-        print('[_getInitialScreen] - Documento não existe ou tipo de usuário inválido. Deslogando.'); // Adicionar
+        print('[_getInitialScreen] - Documento não existe ou tipo de usuário inválido. Deslogando.');
         await FirebaseAuth.instance.signOut();
-        return const TelaInicialScreen(); // Ou TelaLoginScreen()
+        return const TelaInicialScreen();
       } catch (e) {
         print('Erro ao buscar tipo de usuário no Firestore: $e');
-        await FirebaseAuth.instance.signOut(); // Desloga em caso de erro
-        return const TelaInicialScreen(); // Fallback para a tela inicial
+        await FirebaseAuth.instance.signOut();
+        return const TelaInicialScreen();
       }
     }
   }
@@ -75,14 +67,13 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'RgPet App',
-      // Adicione estas 3 linhas
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
         GlobalCupertinoLocalizations.delegate,
       ],
       supportedLocales: const [
-        Locale('pt', 'BR'), // Suporte para português do Brasil
+        Locale('pt', 'BR'),
       ],
       theme: ThemeData(
         brightness: Brightness.dark,
@@ -134,20 +125,16 @@ class MyApp extends StatelessWidget {
           ),
         ),
       ),
-      // NOVO: Use um StreamBuilder para observar o estado de autenticação
       home: StreamBuilder<User?>(
-        stream: FirebaseAuth.instance.authStateChanges(), // Escuta mudanças no estado de autenticação
+        stream: FirebaseAuth.instance.authStateChanges(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
-            // Mostra um indicador de progresso enquanto o Firebase verifica o estado inicial
             return const Scaffold(
               body: Center(
                 child: CircularProgressIndicator(),
               ),
             );
           }
-          // Se houver um usuário logado (snapshot.hasData é true), determine a tela com base no perfil
-          // Se não houver usuário logado (snapshot.hasData é false), vai para a tela inicial
           return FutureBuilder<Widget>(
             future: _getInitialScreen(),
             builder: (context, screenSnapshot) {
@@ -161,7 +148,6 @@ class MyApp extends StatelessWidget {
               if (screenSnapshot.hasData) {
                 return screenSnapshot.data!;
               }
-              // Fallback caso algo dê errado
               return const TelaInicialScreen();
             },
           );
@@ -177,6 +163,7 @@ class MyApp extends StatelessWidget {
         '/dono': (context) => const TelaDono(),
         '/veterinario': (context) => const TelaVeterinario(),
         '/gerenciar_horarios_veterinario': (context) => const TelaGerenciarHorariosVeterinario(),
+        '/historico_consultas': (context) => const TelaHistoricoConsultas(), // NOVO: Rota para o histórico
       },
       debugShowCheckedModeBanner: false,
     );
