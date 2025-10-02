@@ -1,44 +1,27 @@
 import 'package:flutter/material.dart';
-import 'package:rgpet/screens/perfil_veterinario_screen.dart';
-import 'package:rgpet/screens/tela_consultas_veterinario.dart';
-import 'package:rgpet/screens/tela_solicitacoes_veterinario.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-class TelaVeterinario extends StatefulWidget {
+class TelaVeterinario extends StatelessWidget {
   const TelaVeterinario({super.key});
 
-  @override
-  State<TelaVeterinario> createState() => _TelaVeterinarioState();
-}
-
-class _TelaVeterinarioState extends State<TelaVeterinario> {
-  int _selectedIndex = 0; // Para controlar a barra de navegação inferior
-
-  static final List<Widget> _widgetOptions = <Widget>[
-    const _VeterinarioHomePageContent(),
-    const TelaSolicitacoesVeterinario(),
-    const TelaConsultasVeterinario(),
-    const PerfilVeterinarioScreen(),
-  ];
-
-  @override
-  void initState() {
-    super.initState();
-  }
-
-  void _onItemTapped(int index) {
-    setState(() {
-      _selectedIndex = index;
-    });
-  }
-
+  // A tela Veterinario não precisa mais de estado para gerenciar o Bottom Bar.
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF1E1E2C),
       appBar: AppBar(
         backgroundColor: const Color(0xFF1E1E2C),
+        elevation: 0,
+        // NOVO: ÍCONE DE PERFIL (Canto Superior Esquerdo)
+        leading: IconButton(
+          icon: const Icon(Icons.person, color: Color(0xFFFDC03D), size: 28), // Ícone de perfil
+          onPressed: () {
+            // Navega para a tela de Perfil
+            Navigator.of(context).pushNamed('/perfil_veterinario');
+          },
+          tooltip: 'Perfil',
+        ),
         title: Text(
           'RGPet',
           style: Theme.of(context).textTheme.headlineMedium!.copyWith(
@@ -46,52 +29,28 @@ class _TelaVeterinarioState extends State<TelaVeterinario> {
                 fontWeight: FontWeight.bold,
               ),
         ),
+        centerTitle: true,
         actions: [
           IconButton(
             icon: const Icon(Icons.logout, color: Colors.white70),
             onPressed: () async {
               await FirebaseAuth.instance.signOut();
-              if (mounted) {
-                Navigator.of(context).pushNamedAndRemoveUntil('/login', (Route<dynamic> route) => false);
-              }
+              // Retorna para a tela de login
+              Navigator.of(context).pushNamedAndRemoveUntil('/login', (Route<dynamic> route) => false);
             },
           ),
         ],
       ),
-      body: _widgetOptions.elementAt(_selectedIndex),
-      bottomNavigationBar: BottomNavigationBar(
-        backgroundColor: const Color(0xFF2C2C3A),
-        items: const <BottomNavigationBarItem>[
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home),
-            label: 'Home',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.mail),
-            label: 'Solicitações',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.calendar_month),
-            label: 'Consultas',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person),
-            label: 'Perfil',
-          ),
-        ],
-        currentIndex: _selectedIndex,
-        selectedItemColor: const Color(0xFFFDC03D),
-        unselectedItemColor: Colors.white70,
-        onTap: _onItemTapped,
-        type: BottomNavigationBarType.fixed,
-      ),
+      // O body agora exibe o conteúdo da Home diretamente
+      body: const _VeterinarioHomePageContent(),
+      // REMOVIDO: bottomNavigationBar
     );
   }
 }
 
 // Widget para o conteúdo da Homepage do Veterinário
 class _VeterinarioHomePageContent extends StatefulWidget {
-  const _VeterinarioHomePageContent({super.key});
+  const _VeterinarioHomePageContent(); // Adicionando a chave super.key
 
   @override
   State<_VeterinarioHomePageContent> createState() => _VeterinarioHomePageContentState();
@@ -101,8 +60,6 @@ class _VeterinarioHomePageContentState extends State<_VeterinarioHomePageContent
   String _nomeVeterinario = 'Veterinário(a)';
   int _unseenNotificationsCount = 0;
   String? _veterinarioId;
-
-  // NOVO: Variável para a contagem de consultas de hoje
   int _consultasHojeCount = 0;
 
   @override
@@ -152,13 +109,11 @@ class _VeterinarioHomePageContentState extends State<_VeterinarioHomePageContent
     }
   }
 
-  // NOVO: Listener para contar consultas de hoje
   void _setupConsultasHojeListener() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       _veterinarioId = user.uid;
 
-      // Define o início e o fim do dia de hoje (em UTC para compatibilidade com o Firestore)
       final startOfToday = DateTime.now().toUtc().copyWith(hour: 0, minute: 0, second: 0, millisecond: 0, microsecond: 0);
       final endOfToday = startOfToday.add(const Duration(days: 1));
 
@@ -210,12 +165,10 @@ class _VeterinarioHomePageContentState extends State<_VeterinarioHomePageContent
             ),
             child: InkWell(
               onTap: () {
-                // Ação ao clicar: navegar para a tela de consultas de hoje
-                // Idealmente, passaria a data de hoje como parâmetro para a tela
-                // de consultas para que ela já venha filtrada.
+                // Navega para a tela de consultas, aplicando o filtro de data para hoje
                 Navigator.of(context).pushNamed(
-                  '/consultas', // Assumindo uma rota para a tela de consultas
-                  arguments: {'dataFiltro': DateTime.now()}, // Passa a data de hoje
+                  '/consultas',
+                  arguments: {'dataFiltro': DateTime.now()},
                 );
               },
               child: Padding(
@@ -261,7 +214,7 @@ class _VeterinarioHomePageContentState extends State<_VeterinarioHomePageContent
               _buildActionButton(
                 context,
                 icon: Icons.calendar_month,
-                label: 'Gerenciar Agenda',
+                label: 'Agenda',
                 onPressed: () {
                   Navigator.of(context).pushNamed('/gerenciar_horarios_veterinario');
                 },
@@ -271,7 +224,7 @@ class _VeterinarioHomePageContentState extends State<_VeterinarioHomePageContent
                 icon: Icons.pets,
                 label: 'Meus Pacientes',
                 onPressed: () {
-                  // Navegação para a tela de pacientes
+                  Navigator.of(context).pushNamed('/meus_pacientes');
                 },
               ),
               _buildActionButton(
@@ -285,7 +238,7 @@ class _VeterinarioHomePageContentState extends State<_VeterinarioHomePageContent
               _buildActionButton(
                 context,
                 icon: Icons.mail,
-                label: 'Mensagens',
+                label: 'Caixa de Entrada',
                 onPressed: () {
                   // Navegação para a tela de mensagens
                 },
@@ -310,13 +263,6 @@ class _VeterinarioHomePageContentState extends State<_VeterinarioHomePageContent
               children: [
                 _buildWarningCard(
                   context,
-                  title: 'Atestados Pendentes',
-                  subtitle: '5 atestados aguardam sua assinatura.',
-                  icon: Icons.warning,
-                  color: Colors.orange,
-                ),
-                _buildWarningCard(
-                  context,
                   title: 'Pedidos de Exame',
                   subtitle: '2 novos pedidos de exame para revisão.',
                   icon: Icons.assignment,
@@ -337,6 +283,7 @@ class _VeterinarioHomePageContentState extends State<_VeterinarioHomePageContent
     );
   }
 
+  // Helper para construir os botões de ação com estilo customizado
   Widget _buildActionButton(
     BuildContext context, {
     required IconData icon,
@@ -406,12 +353,14 @@ class _VeterinarioHomePageContentState extends State<_VeterinarioHomePageContent
     );
   }
 
+  // Helper para construir os cards de aviso
   Widget _buildWarningCard(BuildContext context, {required String title, required String subtitle, required IconData icon, required Color color}) {
     return Container(
       width: 250,
       margin: const EdgeInsets.only(right: 16),
       child: Card(
-        color: color.withOpacity(0.9),
+        // CORREÇÃO: Usando withOpacity para garantir que o método seja válido
+        color: color.withValues(),
         elevation: 2,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         child: Padding(

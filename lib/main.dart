@@ -12,10 +12,13 @@ import 'package:rgpet/screens/tela_inicial_screen.dart';
 import 'package:rgpet/screens/tela_login_screen.dart';
 import 'package:rgpet/screens/tela_dono.dart';
 import 'package:rgpet/screens/tela_veterinario.dart';
+import 'package:rgpet/screens/perfil_veterinario_screen.dart';
 import 'package:rgpet/screens/tela_cadastro_pet.dart';
 import 'package:rgpet/screens/tela_agendamento_dono.dart';
 import 'package:rgpet/screens/tela_gerenciar_horarios_veterinario.dart';
 import 'package:rgpet/screens/tela_historico_consultas.dart';
+import 'package:rgpet/screens/tela_meus_pacientes.dart';
+
 
 import 'firebase_options.dart';
 
@@ -163,7 +166,9 @@ class MyApp extends StatelessWidget {
         '/login': (context) => const TelaLoginScreen(),
         '/dono': (context) => const TelaDono(),
         '/veterinario': (context) => const TelaVeterinario(),
+        '/perfil_veterinario': (context) => const PerfilVeterinarioScreen(),
         '/gerenciar_horarios_veterinario': (context) => const TelaGerenciarHorariosVeterinario(),
+        '/meus_pacientes': (context) => const TelaMeusPacientes(),
         '/historico_consultas': (context) => const TelaHistoricoConsultas(),
         '/consultas': (context) => const TelaConsultasVeterinario(),
       },

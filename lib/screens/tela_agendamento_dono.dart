@@ -233,7 +233,7 @@ class _TelaAgendamentoDonoState extends State<TelaAgendamentoDono> {
           'donoUid': user.uid,
           'petId': _selectedPetId,
           'tipo': 'nova_consulta',
-          'mensagem': 'Nova solicitação de consulta (${_selectedProcedure}) para ${DateFormat('dd/MM/yyyy HH:mm').format(dataHoraConsulta)}.',
+          'mensagem': 'Nova solicitação de consulta ($_selectedProcedure) para ${DateFormat('dd/MM/yyyy HH:mm').format(dataHoraConsulta)}.',
           'lida': false,
           'timestamp': FieldValue.serverTimestamp(),
           'consultaId': consultaRef.id,

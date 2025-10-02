@@ -152,7 +152,7 @@ class _PerfilVeterinarioScreenState extends State<PerfilVeterinarioScreen> {
                               icon: const Icon(Icons.edit, color: Colors.white),
                               label: Text('Editar Perfil', style: Theme.of(context).textTheme.labelLarge?.copyWith(color: Colors.white)),
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: Theme.of(context).elevatedButtonTheme.style?.backgroundColor?.resolve({MaterialState.selected}),
+                                backgroundColor: Theme.of(context).elevatedButtonTheme.style?.backgroundColor?.resolve({WidgetState.selected}),
                                 padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
                                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25.0)),
                               ),
